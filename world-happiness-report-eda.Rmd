@@ -19,11 +19,12 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(fs) # file system operations
 library(janitor) # clean up file names
+library(ggcorrplot) # correlations heatmap
 ```
 
 ## Explore files in our data directory
 
-We have multiple files on the world health data that may have the same or similar variable names. It may be possible to combine these datasets.
+We have multiple files on the world health data that may have the same or similar variable names. It may be possible to later combine these datasets.
 
 ```{r}
 # Specify data directory and print filenames
@@ -44,28 +45,170 @@ csv_files # print csv file list
 
 ## Import data
 
-### Test importing one .csv file
+Since the most recent report is from 2019, I will examine this.
+
+### 2019 World Happiness Report
 
 Now, I test importing one of the .csv files and examining its general structure. 
-```{r}
+```{r message=FALSE}
 
 # Import one .csv file and
-test_csv_file <- readr::read_csv(csv_files[2])
+whr_2019 <- readr::read_csv("data/world-happiness-2019.csv")
 
-glimpse(test_csv_file)
+glimpse(whr_2019)
 ```
 
-As shown above, many variable names have spaces. I'll use the `janitor` package to clean up the file names. I'll try it on one csv file first.
+### Clean up variable names
+
+As shown above, many variable names have spaces. I'll use the `janitor` package to clean up the variable names.
+
 
 ```{r}
-
 # View data after cleaning variable names
 
-test_csv_file %>% 
+whr_2019_clean <- 
+whr_2019 %>% 
   janitor::clean_names() %>% 
   glimpse()
 ```
 
-### Compile all data into one data frame
+### Check for missing values
 
-Next, I will consider what variables are the same and different across the datasets. I will create a `year` variable for each of the datasets and combine the 2015-2019 data to see trends over time.
+It is also important to check if there are any missing values across any of the variables. Below, we check this before doing exploratory data analysis.
+
+```{r}
+# Identify any missing values across variables
+apply(whr_2019_clean, 2, anyNA)
+```
+
+### Summary Statistics across variables
+1. **GDP per Capita**: `gdp_per_capita` The GDP per capita level of a country.
+2. **Social Support**: `social_support` The impact of a supportive social circle, i.e., the positive impact of having relatives or friends.
+3. **Healthy Life Expectancy**: `healthy_life_expectancy` The average life expectancy for healthy individuals.
+4. **Freedom to Make Life Choices**: `freedom_to_make_life_choices` The positive impact of a population's freedom of choice.
+5. **Generosity**: `generosity` The population's overall level of generosity.
+6. **Perceptions of Corruption**: `perceptions_of_corruption` The level of trust in business and government.
+
+```{r}
+summary(whr_2019_clean)
+```
+
+## Visualization
+
+### Happiness score
+
+```{r}
+ggplot(whr_2019_clean, aes(x = score)) +
+  geom_histogram(aes(y = ..density..), bins = 35, color = "black") +
+  geom_density() +
+  labs(x = "Happiness Score") +
+  theme_classic()
+```
+
+
+### The 10 most happy countries
+
+```{r warning=FALSE}
+
+# descriptive table
+
+top10_happy <- 
+whr_2019_clean %>% 
+  arrange(desc(score)) %>% 
+  head(10) %>% 
+  select(overall_rank:score)
+
+# barplot of top 5 happiest countries
+top10_happy %>% 
+  ggplot(aes(x = score, y = reorder(country_or_region, score),
+             fill = country_or_region)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Top 10 happiest countries",
+       x = "Happiness Score",
+       y = "Country") +
+  theme_classic() +
+  theme(legend.position = "none")
+
+```
+
+### The 10 least happy countries
+
+```{r}
+
+# descriptive table
+
+bottom10_happy <- 
+whr_2019_clean %>% 
+  arrange(score) %>% 
+  head(10) %>% 
+  select(overall_rank:score)
+
+# barplot of 10 least happy countries
+bottom10_happy %>% 
+  ggplot(aes(x = score, y = reorder(country_or_region, desc(score)),
+             fill = country_or_region)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_brewer(palette = "Set3") +
+  labs(title = "The 5 least happy countries",
+       x = "Happiness Score",
+       y = "Country") +
+  theme_classic() +
+  theme(legend.position = "none")
+
+```
+
+## Relationship between happiness and other variables
+
+First, we will explore a correlation heatmap to see which variables are most strongly related to happiness scores.
+
+```{r}
+# select the variables for correlation heatmap
+corr_vars <- whr_2019_clean %>% 
+  select(score:perceptions_of_corruption)
+
+ggcorrplot::ggcorrplot(cor(corr_vars), lab = TRUE)
+
+```
+
+The variables with the strongest relationship to happiness are GDP (.79), social support (.78), and healthy life expectancy (.78).
+
+### Happiness and GDP, social support, and healthy life expectancy
+
+```{r message=FALSE, warning=FALSE}
+
+# GDP
+
+ggplot(whr_2019_clean, aes(x = gdp_per_capita,
+                           y = score)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Relationship between GPD and Happiness",
+       x = "GPD",
+       y = "Happiness Score") +
+  theme_classic()
+
+# Social Support
+
+ggplot(whr_2019_clean, aes(x = social_support,
+                           y = score)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Relationship between Social Support and Happiness",
+       x = "Social Support",
+       y = "Happiness Score") +
+  theme_classic()
+
+# Healthy Life Expectancy
+
+ggplot(whr_2019_clean, aes(x = healthy_life_expectancy,
+                           y = score)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Relationship between Healthy Life Expectancy and Happiness",
+       x = "Healthy Life Expectancy",
+       y = "Happiness Score") +
+  theme_classic()
+
+```
+
