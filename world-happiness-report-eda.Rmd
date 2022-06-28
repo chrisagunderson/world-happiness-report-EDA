@@ -7,3 +7,61 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+
+## Import Libraries
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(fs) # file system operations
+library(janitor) # clean up file names
+```
+
+## Explore files in our data directory
+
+We have multiple files on the world health data that may have the same or similar variable names. It may be possible to combine these datasets.
+
+```{r}
+# Specify data directory and print filenames
+
+data_dir <- "data"
+
+fs::dir_ls(data_dir)
+```
+
+Since we have a python script in the directory, we want to exclude this file for import.
+
+```{r}
+# exclude files that are not .csv
+
+csv_files <- fs::dir_ls(data_dir, regexp = "\\.csv$")
+csv_files # print csv file list
+```
+
+## Import data
+
+### Test importing one .csv file
+
+Now, I test importing one of the .csv files and examining its general structure. 
+```{r}
+
+# Import one .csv file and
+test_csv_file <- readr::read_csv(csv_files[2])
+
+glimpse(test_csv_file)
+```
+
+As shown above, many variable names have spaces. I'll use the `janitor` package to clean up the file names. I'll try it on one csv file first.
+
+```{r}
+
+# View data after cleaning variable names
+
+test_csv_file %>% 
+  janitor::clean_names() %>% 
+  glimpse()
+```
+
+### Compile all data into one data frame
+
+Next, I will consider what variables are the same and different across the datasets. I will create a `year` variable for each of the datasets and combine the 2015-2019 data to see trends over time.
